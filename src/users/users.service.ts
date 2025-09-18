@@ -1,15 +1,21 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { User } from './domain/user';
 import { UserPlainObject } from './domain/user.plain-object';
 import { CreateUserDto } from './application/dtos/create.user.dto';
 import { EmailService } from 'src/email/email.service';
 import { SmsService } from 'src/sms/sms.service';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
+import { UserCreatedEvent } from './domain/user.created.event';
 
 @Injectable()
 export class UsersService {
     // hacemos uso de la inyeccion de dependencias por constructor
 
-    constructor( private readonly emailService: EmailService,  private readonly smsService: SmsService) {}
+    constructor(
+        private readonly emailService: EmailService,
+        private readonly smsService: SmsService,
+        private readonly eventEmitter: EventEmitter2
+    ) { }
 
     private users: User[] = []
 
@@ -27,9 +33,12 @@ export class UsersService {
         // AGREGA AL USER A LA BASE DE DATOS
 
         this.users.push(user);
-        // SIMULAR EL ENVIO DE MAIL Y SMS
-        this.sendWelcomeEmail(user);
-        this.sendWelcomeSms(user);
+
+        //emitimos el primer evento
+
+        this.eventEmitter.emit('user.created', new UserCreatedEvent(user.id));
+
+        //para que los methods siguientes se puedan "subscribir a él"
     }
 
 
@@ -39,12 +48,27 @@ export class UsersService {
         }
     }
 
+    //con el decorador OnEvent vamos a recibir el evento creado en create method
+    //Primero en la secuencia de los eventos
+    @OnEvent('user.created')
+    private sendWelcomeEmail(payload: UserCreatedEvent): void {
 
-    private sendWelcomeEmail(user: User): void {
+        const user = this.getUserById(payload.userId);
         this.emailService.sendEmail(user.email, 'Welcome!', 'Thanks for joining us!');
     }
-
-    private sendWelcomeSms(user: User): void {
+    //Segundo en la secuencia de los eventos
+    @OnEvent('user.created')
+    private sendWelcomeSms(payload: UserCreatedEvent): void {
+        const user = this.getUserById(payload.userId);
         this.smsService.sendSms(user.phonenumber, 'Welcome to our service!');
+    }
+    
+
+    private getUserById(userId: number): User {
+        const user = this.users.find(user => user.id === userId);
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+        return user;
     }
 }
