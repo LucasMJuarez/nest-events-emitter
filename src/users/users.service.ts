@@ -20,9 +20,7 @@ export class UsersService {
 
     public create(data: CreateUserDto): void {
         // VALIDA EL USER
-        if (this.users.some((user) => user.id === data.id || user.email === data.email || user.phonenumber === data.phonenumber)) {
-            throw new ConflictException('User already exists');
-        }
+        this.ensureUserDoesNotExist(data);
         // CREA UNA INSTANCIA DEL USUARIO
 
         const user = new User(data.id, data.email, data.name, data.phonenumber);
@@ -30,7 +28,23 @@ export class UsersService {
 
         this.users.push(user);
         // SIMULAR EL ENVIO DE MAIL Y SMS
-        this.emailService.sendEmail(data.email, 'Welcome!', 'Thanks for joining us!');
-        this.smsService.sendSms(data.phonenumber, 'Welcome to our service!');
+        this.sendWelcomeEmail(user);
+        this.sendWelcomeSms(user);
+    }
+
+
+    private ensureUserDoesNotExist(data: CreateUserDto): void {
+        if (this.users.some((user) => user.id === data.id || user.email === data.email || user.phonenumber === data.phonenumber)) {
+            throw new ConflictException('User already exists');
+        }
+    }
+
+
+    private sendWelcomeEmail(user: User): void {
+        this.emailService.sendEmail(user.email, 'Welcome!', 'Thanks for joining us!');
+    }
+
+    private sendWelcomeSms(user: User): void {
+        this.smsService.sendSms(user.phonenumber, 'Welcome to our service!');
     }
 }
